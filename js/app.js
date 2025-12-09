@@ -8,7 +8,7 @@
 
     // Application state
     const app = {
-        currentPage: 'selector',
+        currentPage: 'api',
         assetSelector: null,
         api: null,
         uploadFiles: [],
@@ -29,9 +29,11 @@
         // Initialize Token Generator
         app.tokenGenerator = new AdobeTokenGenerator();
 
-        // Initialize Asset Selector
-        app.assetSelector = new AEMAssetSelector();
-        app.assetSelector.init();
+        // Initialize Asset Selector (only if available)
+        if (typeof AEMAssetSelector !== 'undefined') {
+            app.assetSelector = new AEMAssetSelector();
+            app.assetSelector.init();
+        }
 
         // Setup navigation
         setupNavigation();
@@ -808,9 +810,64 @@
     }
 
     /**
-     * Load settings from config
+     * Load settings from .env file via server API
      */
-    function loadSettings() {
+    async function loadSettings() {
+        try {
+            const response = await fetch('/api/env');
+            const data = await response.json();
+
+            if (data.exists && data.config) {
+                const env = data.config;
+
+                // Server Configuration
+                document.getElementById('settings-host').value = env.AEM_HOST || '';
+                document.getElementById('settings-delivery').value = env.AEM_DELIVERY_URL || '';
+                document.getElementById('settings-repo-id').value = env.AEM_REPOSITORY_ID || '';
+
+                // Authentication
+                document.getElementById('settings-ims-org').value = env.IMS_ORG || '';
+                document.getElementById('settings-api-key').value = env.API_KEY || '';
+                document.getElementById('settings-client-secret').value = env.CLIENT_SECRET || '';
+                document.getElementById('settings-tech-account').value = env.TECHNICAL_ACCOUNT_ID || '';
+                document.getElementById('settings-tech-email').value = env.TECHNICAL_ACCOUNT_EMAIL || '';
+                document.getElementById('settings-ims-endpoint').value = env.IMS_ENDPOINT || 'ims-na1.adobelogin.com';
+                document.getElementById('settings-metascopes').value = env.METASCOPES || 'ent_aem_cloud_api';
+
+                // Private Key - not stored in .env, leave empty for manual input
+                document.getElementById('settings-private-key').value = '';
+
+                // Paths
+                document.getElementById('settings-browse-path').value = env.BROWSE_PATH || '/content/dam';
+                document.getElementById('settings-upload-path').value = env.UPLOAD_PATH || '/content/dam/uploads';
+                document.getElementById('settings-download-path').value = env.DOWNLOAD_PATH || '/var/downloads';
+                document.getElementById('settings-save-path').value = env.SAVE_PATH || '/content/dam/selected';
+
+                // Access Token
+                document.getElementById('settings-token').value = env.ACCESS_TOKEN || '';
+                updateTokenExpiryDisplay(env.ACCESS_TOKEN);
+
+                // Also update configManager for runtime use
+                updateConfigManagerFromEnv(env);
+
+                console.log('.env file loaded successfully');
+            } else {
+                // Fallback to localStorage config
+                loadSettingsFromLocalStorage();
+            }
+        } catch (error) {
+            console.warn('Failed to load .env file, falling back to localStorage:', error);
+            loadSettingsFromLocalStorage();
+        }
+
+        // Load non-.env settings from localStorage (UI preferences)
+        loadUISettings();
+    }
+
+    /**
+     * Load settings from localStorage (fallback)
+     */
+    function loadSettingsFromLocalStorage() {
         const config = configManager.getConfig();
 
         // Server Configuration
@@ -827,16 +884,23 @@
         document.getElementById('settings-private-key').value = config.auth.privateKey || '';
         document.getElementById('settings-ims-endpoint').value = config.auth.imsEndpoint || 'ims-na1.adobelogin.com';
         document.getElementById('settings-metascopes').value = config.auth.metascopes || 'ent_aem_cloud_api';
-        document.getElementById('settings-token').value = config.auth.accessToken || '';
-
-        // Update token expiry display
-        updateTokenExpiryDisplay(config.auth.accessToken);
 
         // Paths
         document.getElementById('settings-browse-path').value = config.paths.browsePath || '';
         document.getElementById('settings-upload-path').value = config.paths.uploadPath || '';
         document.getElementById('settings-download-path').value = config.paths.downloadPath || '';
         document.getElementById('settings-save-path').value = config.paths.savePath || '';
+    }
+
+    /**
+     * Load UI settings from localStorage (non-sensitive settings)
+     */
+    function loadUISettings() {
+        const config = configManager.getConfig();
+
+        // Access Token (stored in localStorage, not .env for security)
+        document.getElementById('settings-token').value = config.auth.accessToken || '';
+        updateTokenExpiryDisplay(config.auth.accessToken);
 
         // Asset Selector Options
         document.getElementById('settings-env').value = config.selector.env || 'PROD';
@@ -849,6 +913,35 @@
         document.getElementById('settings-timeout').value = config.api.timeout || 30000;
         document.getElementById('settings-max-upload').value = (config.api.maxUploadSize || 104857600) / 1048576;
         document.getElementById('settings-auto-refresh').checked = config.api.autoRefreshToken !== false;
+    }
+
+    /**
+     * Update configManager from .env values
+     */
+    function updateConfigManagerFromEnv(env) {
+        const config = configManager.getConfig();
+
+        config.server.host = env.AEM_HOST || '';
+        config.server.deliveryUrl = env.AEM_DELIVERY_URL || '';
+        config.server.repositoryId = env.AEM_REPOSITORY_ID || '';
+
+        config.auth.imsOrg = env.IMS_ORG || '';
+        config.auth.apiKey = env.API_KEY || '';
+        config.auth.clientSecret = env.CLIENT_SECRET || '';
+        config.auth.technicalAccountId = env.TECHNICAL_ACCOUNT_ID || '';
+        config.auth.technicalAccountEmail = env.TECHNICAL_ACCOUNT_EMAIL || '';
+        config.auth.imsEndpoint = env.IMS_ENDPOINT || 'ims-na1.adobelogin.com';
+        config.auth.metascopes = env.METASCOPES || 'ent_aem_cloud_api';
+        config.auth.accessToken = env.ACCESS_TOKEN || '';
+        // Private Key is not stored in .env, keep empty
+        config.auth.privateKey = '';
+
+        config.paths.browsePath = env.BROWSE_PATH || '/content/dam';
+        config.paths.uploadPath = env.UPLOAD_PATH || '/content/dam/uploads';
+        config.paths.downloadPath = env.DOWNLOAD_PATH || '/var/downloads';
+        config.paths.savePath = env.SAVE_PATH || '/content/dam/selected';
+
+        configManager.saveConfig(config);
     }
 
     /**
@@ -877,31 +970,81 @@
     }
 
     /**
-     * Save settings
+     * Save settings to .env file and localStorage
      */
-    function saveSettings() {
+    async function saveSettings() {
+        // Prepare .env data (sensitive credentials)
+        const privateKey = document.getElementById('settings-private-key').value.trim();
+        const envData = {
+            // Server Configuration
+            AEM_HOST: document.getElementById('settings-host').value.trim(),
+            AEM_DELIVERY_URL: document.getElementById('settings-delivery').value.trim(),
+            AEM_REPOSITORY_ID: document.getElementById('settings-repo-id').value.trim(),
+
+            // Authentication
+            IMS_ORG: document.getElementById('settings-ims-org').value.trim(),
+            API_KEY: document.getElementById('settings-api-key').value.trim(),
+            CLIENT_SECRET: document.getElementById('settings-client-secret').value.trim(),
+            TECHNICAL_ACCOUNT_ID: document.getElementById('settings-tech-account').value.trim(),
+            TECHNICAL_ACCOUNT_EMAIL: document.getElementById('settings-tech-email').value.trim(),
+            IMS_ENDPOINT: document.getElementById('settings-ims-endpoint').value.trim() || 'ims-na1.adobelogin.com',
+            METASCOPES: document.getElementById('settings-metascopes').value.trim() || 'ent_aem_cloud_api',
+
+            // Access Token
+            ACCESS_TOKEN: document.getElementById('settings-token').value.trim(),
+
+            // Paths
+            BROWSE_PATH: document.getElementById('settings-browse-path').value.trim() || '/content/dam',
+            UPLOAD_PATH: document.getElementById('settings-upload-path').value.trim(),
+            DOWNLOAD_PATH: document.getElementById('settings-download-path').value.trim(),
+            SAVE_PATH: document.getElementById('settings-save-path').value.trim()
+        };
+
+        // Save to .env file via server API
+        try {
+            const response = await fetch('/api/env', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(envData)
+            });
+
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to save .env file');
+            }
+
+            console.log('.env file saved successfully');
+        } catch (error) {
+            console.error('Failed to save .env file:', error);
+            Toast.warning('Failed to save to .env file. Settings saved to browser only.');
+        }
+
+        // Also save to localStorage (for runtime use and UI preferences)
         const config = {
             server: {
-                host: document.getElementById('settings-host').value.trim(),
-                deliveryUrl: document.getElementById('settings-delivery').value.trim(),
-                repositoryId: document.getElementById('settings-repo-id').value.trim()
+                host: envData.AEM_HOST,
+                deliveryUrl: envData.AEM_DELIVERY_URL,
+                repositoryId: envData.AEM_REPOSITORY_ID
             },
             auth: {
-                imsOrg: document.getElementById('settings-ims-org').value.trim(),
-                apiKey: document.getElementById('settings-api-key').value.trim(),
-                clientSecret: document.getElementById('settings-client-secret').value.trim(),
-                technicalAccountId: document.getElementById('settings-tech-account').value.trim(),
-                technicalAccountEmail: document.getElementById('settings-tech-email').value.trim(),
-                privateKey: document.getElementById('settings-private-key').value.trim(),
-                imsEndpoint: document.getElementById('settings-ims-endpoint').value.trim() || 'ims-na1.adobelogin.com',
-                metascopes: document.getElementById('settings-metascopes').value.trim() || 'ent_aem_cloud_api',
+                imsOrg: envData.IMS_ORG,
+                apiKey: envData.API_KEY,
+                clientSecret: envData.CLIENT_SECRET,
+                technicalAccountId: envData.TECHNICAL_ACCOUNT_ID,
+                technicalAccountEmail: envData.TECHNICAL_ACCOUNT_EMAIL,
+                privateKey: privateKey,
+                imsEndpoint: envData.IMS_ENDPOINT,
+                metascopes: envData.METASCOPES,
                 accessToken: document.getElementById('settings-token').value.trim()
             },
             paths: {
-                browsePath: document.getElementById('settings-browse-path').value.trim() || '/content/dam',
-                uploadPath: document.getElementById('settings-upload-path').value.trim(),
-                downloadPath: document.getElementById('settings-download-path').value.trim(),
-                savePath: document.getElementById('settings-save-path').value.trim()
+                browsePath: envData.BROWSE_PATH,
+                uploadPath: envData.UPLOAD_PATH,
+                downloadPath: envData.DOWNLOAD_PATH,
+                savePath: envData.SAVE_PATH
             },
             selector: {
                 env: document.getElementById('settings-env').value,
