@@ -289,6 +289,16 @@ const props = {
                                     <option value="thumbnail">Thumbnail</option>
                                 </select>
                             </div>
+                            <div class="form-group">
+                                <label>Download To</label>
+                                <select id="download-destination">
+                                    <option value="browser">Browser (로컬 PC)</option>
+                                    <option value="server">Server (서버 디렉토리)</option>
+                                </select>
+                                <small class="form-hint" id="download-path-hint" style="display: none; color: #666; margin-top: 4px;">
+                                    저장 위치: <span id="server-download-path"></span>
+                                </small>
+                            </div>
                             <button class="btn btn-primary" id="download-btn">Download</button>
                             <div class="api-result" id="download-result"></div>
                         </div>
@@ -571,11 +581,11 @@ const blob = await aemApi.downloadAsset(
     </div>
 
     <!-- Scripts -->
-    <script src="js/config.js"></script>
-    <script src="js/utils.js"></script>
-    <script src="js/token-generator.js"></script>
-    <script src="js/api-client.js"></script>
-    <script src="js/asset-selector.js"></script>
-    <script src="js/app.js"></script>
+    <script src="js/config.js?v=3"></script>
+    <script src="js/utils.js?v=3"></script>
+    <script src="js/token-generator.js?v=3"></script>
+    <script src="js/api-client.js?v=3"></script>
+    <script src="js/asset-selector.js?v=3"></script>
+    <script src="js/app.js?v=4"></script>
 </body>
 </html>

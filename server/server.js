@@ -75,6 +75,12 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // AEM Download to server (saves file to server's download directory)
+    if (urlPath === '/api/download-to-server') {
+        handleDownloadToServer(req, res);
+        return;
+    }
+
     // Default to index.html
     if (urlPath === '/') {
         urlPath = '/index.html';
@@ -311,6 +317,157 @@ function handleIMSProxy(req, res) {
 }
 
 /**
+ * Handle download to server (saves file to server's download directory)
+ */
+function handleDownloadToServer(req, res) {
+    if (req.method !== 'POST') {
+        res.writeHead(405);
+        res.end(JSON.stringify({ error: 'Method not allowed' }));
+        return;
+    }
+
+    let body = '';
+    req.on('data', chunk => {
+        body += chunk.toString();
+    });
+
+    req.on('end', () => {
+        try {
+            const { assetPath, downloadPath, aemHost, authorization, apiKey, rendition } = JSON.parse(body);
+
+            if (!assetPath || !aemHost) {
+                res.writeHead(400);
+                res.end(JSON.stringify({ error: 'Missing required parameters: assetPath, aemHost' }));
+                return;
+            }
+
+            // Build download URL based on rendition type
+            let downloadUrl;
+            const assetApiPath = assetPath.replace('/content/dam', '');
+
+            if (rendition === 'web') {
+                downloadUrl = `${aemHost}/api/assets${assetApiPath}/renditions/cq5dam.web.1280.1280.jpeg`;
+            } else if (rendition === 'thumbnail') {
+                downloadUrl = `${aemHost}/api/assets${assetApiPath}/renditions/cq5dam.thumbnail.319.319.png`;
+            } else {
+                // Original
+                downloadUrl = `${aemHost}/api/assets${assetApiPath}/original`;
+            }
+
+            console.log(`[Download to Server] Downloading from: ${downloadUrl}`);
+
+            const parsedUrl = new URL(downloadUrl);
+            const filename = assetPath.split('/').pop();
+
+            // Determine save directory (use provided path or default)
+            const saveDir = downloadPath || path.join(ROOT_DIR, 'downloads');
+
+            // Create directory if it doesn't exist
+            if (!fs.existsSync(saveDir)) {
+                fs.mkdirSync(saveDir, { recursive: true });
+            }
+
+            const savePath = path.join(saveDir, filename);
+
+            const options = {
+                hostname: parsedUrl.hostname,
+                port: 443,
+                path: parsedUrl.pathname + parsedUrl.search,
+                method: 'GET',
+                headers: {}
+            };
+
+            if (authorization) {
+                options.headers['Authorization'] = authorization;
+            }
+            if (apiKey) {
+                options.headers['x-api-key'] = apiKey;
+            }
+
+            const downloadReq = https.request(options, (downloadRes) => {
+                // Handle redirect
+                if (downloadRes.statusCode >= 300 && downloadRes.statusCode < 400 && downloadRes.headers.location) {
+                    console.log(`[Download to Server] Redirecting to: ${downloadRes.headers.location}`);
+                    // Follow redirect
+                    const redirectUrl = new URL(downloadRes.headers.location);
+                    options.hostname = redirectUrl.hostname;
+                    options.path = redirectUrl.pathname + redirectUrl.search;
+
+                    const redirectReq = https.request(options, (redirectRes) => {
+                        handleDownloadResponse(redirectRes, savePath, filename, res);
+                    });
+                    redirectReq.on('error', (err) => {
+                        console.error('[Download to Server Error]', err.message);
+                        res.writeHead(502);
+                        res.end(JSON.stringify({ error: 'Download error: ' + err.message }));
+                    });
+                    redirectReq.end();
+                    return;
+                }
+
+                handleDownloadResponse(downloadRes, savePath, filename, res);
+            });
+
+            downloadReq.on('error', (err) => {
+                console.error('[Download to Server Error]', err.message);
+                res.writeHead(502);
+                res.end(JSON.stringify({ error: 'Download error: ' + err.message }));
+            });
+
+            downloadReq.end();
+
+        } catch (e) {
+            console.error('[Download to Server Error]', e.message);
+            res.writeHead(400);
+            res.end(JSON.stringify({ error: 'Invalid request: ' + e.message }));
+        }
+    });
+}
+
+/**
+ * Handle download response and save to file
+ */
+function handleDownloadResponse(downloadRes, savePath, filename, res) {
+    if (downloadRes.statusCode !== 200) {
+        res.writeHead(downloadRes.statusCode);
+        res.end(JSON.stringify({
+            error: `Download failed with status ${downloadRes.statusCode}`,
+            statusCode: downloadRes.statusCode
+        }));
+        return;
+    }
+
+    const fileStream = fs.createWriteStream(savePath);
+    let downloadedSize = 0;
+
+    downloadRes.on('data', chunk => {
+        downloadedSize += chunk.length;
+    });
+
+    downloadRes.pipe(fileStream);
+
+    fileStream.on('finish', () => {
+        fileStream.close();
+        console.log(`[Download to Server] Saved: ${savePath} (${downloadedSize} bytes)`);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: true,
+            filename: filename,
+            path: savePath,
+            size: downloadedSize,
+            contentType: downloadRes.headers['content-type']
+        }));
+    });
+
+    fileStream.on('error', (err) => {
+        console.error('[Download to Server Error]', err.message);
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: 'Failed to save file: ' + err.message }));
+    });
+}
+
+/**
  * Handle ENV file API (read/write .env file)
  */
 function handleEnvApi(req, res) {
@@ -370,29 +527,49 @@ function handleEnvApi(req, res) {
 
 /**
  * Parse .env file content to object
+ * Supports multiline values (lines starting with whitespace are continuations)
  */
 function parseEnvFile(content) {
     const config = {};
     const lines = content.split('\n');
+    let currentKey = null;
+    let currentValue = '';
 
     for (const line of lines) {
+        // Check if this is a continuation line (starts with whitespace and we have a current key)
+        if (currentKey && line.match(/^\s+\S/)) {
+            // This is a continuation of the previous value
+            currentValue += line.trim();
+            continue;
+        }
+
+        // Save previous key-value if exists
+        if (currentKey) {
+            config[currentKey] = currentValue;
+            currentKey = null;
+            currentValue = '';
+        }
+
         const trimmed = line.trim();
         // Skip empty lines and comments
         if (!trimmed || trimmed.startsWith('#')) continue;
 
         const equalIndex = trimmed.indexOf('=');
         if (equalIndex > 0) {
-            const key = trimmed.substring(0, equalIndex).trim();
-            let value = trimmed.substring(equalIndex + 1).trim();
+            currentKey = trimmed.substring(0, equalIndex).trim();
+            currentValue = trimmed.substring(equalIndex + 1).trim();
 
             // Remove quotes if present
-            if ((value.startsWith('"') && value.endsWith('"')) ||
-                (value.startsWith("'") && value.endsWith("'"))) {
-                value = value.slice(1, -1);
+            if ((currentValue.startsWith('"') && currentValue.endsWith('"')) ||
+                (currentValue.startsWith("'") && currentValue.endsWith("'"))) {
+                currentValue = currentValue.slice(1, -1);
             }
-
-            config[key] = value;
         }
+    }
+
+    // Save last key-value if exists
+    if (currentKey) {
+        config[currentKey] = currentValue;
     }
 
     return config;

@@ -399,6 +399,22 @@
             downloadAsset();
         });
 
+        // Download destination change handler
+        const downloadDestination = document.getElementById('download-destination');
+        if (downloadDestination) {
+            downloadDestination.addEventListener('change', (e) => {
+                const hint = document.getElementById('download-path-hint');
+                const pathSpan = document.getElementById('server-download-path');
+                if (e.target.value === 'server') {
+                    const config = configManager.getConfig();
+                    pathSpan.textContent = config.paths.downloadPath || '/var/downloads';
+                    hint.style.display = 'block';
+                } else {
+                    hint.style.display = 'none';
+                }
+            });
+        }
+
         // Get Metadata
         document.getElementById('get-meta-btn').addEventListener('click', () => {
             getMetadata();
@@ -610,6 +626,7 @@
     async function downloadAsset(path) {
         const assetPath = path || document.getElementById('download-path').value;
         const rendition = document.getElementById('download-rendition')?.value || 'original';
+        const destination = document.getElementById('download-destination')?.value || 'browser';
         const resultEl = document.getElementById('download-result');
 
         if (!assetPath) {
@@ -623,29 +640,47 @@
                 resultEl.innerHTML = '<pre>Downloading...</pre>';
             }
 
-            const blob = await app.api.downloadAsset(assetPath, rendition);
-            const filename = assetPath.split('/').pop();
+            if (destination === 'server') {
+                // Download to server
+                const result = await app.api.downloadToServer(assetPath, rendition);
 
-            // Trigger download
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+                if (resultEl) {
+                    resultEl.innerHTML = `<pre>${Utils.syntaxHighlight({
+                        success: true,
+                        filename: result.filename,
+                        path: result.path,
+                        size: Utils.formatFileSize(result.size),
+                        contentType: result.contentType
+                    })}</pre>`;
+                }
 
-            if (resultEl) {
-                resultEl.innerHTML = `<pre>${Utils.syntaxHighlight({
-                    success: true,
-                    filename,
-                    size: Utils.formatFileSize(blob.size),
-                    type: blob.type
-                })}</pre>`;
+                Toast.success(`Saved to server: ${result.path}`);
+            } else {
+                // Download to browser
+                const blob = await app.api.downloadAsset(assetPath, rendition);
+                const filename = assetPath.split('/').pop();
+
+                // Trigger browser download
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                if (resultEl) {
+                    resultEl.innerHTML = `<pre>${Utils.syntaxHighlight({
+                        success: true,
+                        filename,
+                        size: Utils.formatFileSize(blob.size),
+                        type: blob.type
+                    })}</pre>`;
+                }
+
+                Toast.success(`Downloaded: ${filename}`);
             }
-
-            Toast.success(`Downloaded: ${filename}`);
         } catch (error) {
             if (resultEl) {
                 resultEl.innerHTML = `<pre class="error">${error.message}</pre>`;
@@ -819,6 +854,7 @@
 
             if (data.exists && data.config) {
                 const env = data.config;
+                console.log('[loadSettings] Loaded from .env:', env);
 
                 // Server Configuration
                 document.getElementById('settings-host').value = env.AEM_HOST || '';
@@ -831,6 +867,8 @@
                 document.getElementById('settings-client-secret').value = env.CLIENT_SECRET || '';
                 document.getElementById('settings-tech-account').value = env.TECHNICAL_ACCOUNT_ID || '';
                 document.getElementById('settings-tech-email').value = env.TECHNICAL_ACCOUNT_EMAIL || '';
+                console.log('[loadSettings] CLIENT_SECRET:', env.CLIENT_SECRET);
+                console.log('[loadSettings] TECHNICAL_ACCOUNT_ID:', env.TECHNICAL_ACCOUNT_ID);
                 document.getElementById('settings-ims-endpoint').value = env.IMS_ENDPOINT || 'ims-na1.adobelogin.com';
                 document.getElementById('settings-metascopes').value = env.METASCOPES || 'ent_aem_cloud_api';
 
@@ -850,7 +888,7 @@
                 // Also update configManager for runtime use
                 updateConfigManagerFromEnv(env);
 
-                console.log('.env file loaded successfully');
+                console.log('.env file loaded successfully', env);
             } else {
                 // Fallback to localStorage config
                 loadSettingsFromLocalStorage();
@@ -894,13 +932,17 @@
 
     /**
      * Load UI settings from localStorage (non-sensitive settings)
+     * Note: Does NOT overwrite values already loaded from .env
      */
     function loadUISettings() {
         const config = configManager.getConfig();
 
-        // Access Token (stored in localStorage, not .env for security)
-        document.getElementById('settings-token').value = config.auth.accessToken || '';
-        updateTokenExpiryDisplay(config.auth.accessToken);
+        // Access Token - only set if not already populated from .env
+        const tokenEl = document.getElementById('settings-token');
+        if (!tokenEl.value) {
+            tokenEl.value = config.auth.accessToken || '';
+            updateTokenExpiryDisplay(config.auth.accessToken);
+        }
 
         // Asset Selector Options
         document.getElementById('settings-env').value = config.selector.env || 'PROD';

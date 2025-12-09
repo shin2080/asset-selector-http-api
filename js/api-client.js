@@ -560,6 +560,49 @@ class AEMAssetAPI {
     }
 
     /**
+     * Download asset to server
+     * Saves the file directly to the server's download directory
+     * @param {string} assetPath - Asset path in AEM
+     * @param {string} rendition - Rendition type (original, web, thumbnail)
+     * @returns {Promise<object>} - Download result with file path and size
+     */
+    async downloadToServer(assetPath, rendition = 'original') {
+        const config = configManager.getConfig();
+
+        const requestBody = {
+            assetPath: assetPath,
+            downloadPath: config.paths.downloadPath,
+            aemHost: config.server.host,
+            authorization: `Bearer ${config.auth.accessToken}`,
+            apiKey: config.auth.apiKey,
+            rendition: rendition
+        };
+
+        try {
+            const response = await fetch('/api/download-to-server', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new APIError(result.error || 'Download to server failed', response.status);
+            }
+
+            return result;
+        } catch (error) {
+            if (error instanceof APIError) {
+                throw error;
+            }
+            throw new APIError('Download to server failed: ' + error.message, 0);
+        }
+    }
+
+    /**
      * Delete asset
      * @param {string} path - Asset path
      */
