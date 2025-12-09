@@ -1,0 +1,19 @@
+{
+  "name": "aem-asset-selector-http-api-demo",
+  "version": "1.0.0",
+  "description": "Adobe AEM Cloud Asset Selector & HTTP API Demo - Vanilla JS Implementation",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "serve": "npx http-server -p 8000 -c-1"
+  },
+  "keywords": [
+    "aem",
+    "adobe",
+    "asset-selector",
+    "dam",
+    "http-api"
+  ],
+  "author": "",
+  "license": "MIT"
+}

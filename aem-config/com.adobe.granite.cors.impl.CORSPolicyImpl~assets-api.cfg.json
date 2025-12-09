@@ -1,0 +1,37 @@
+{
+    "alloworigin": [
+        "https://assets-api.ysshin.com"
+    ],
+    "alloworiginregexp": [
+    ],
+    "allowedpaths": [
+        "/api/assets/.*",
+        "/content/dam/.*"
+    ],
+    "exposedheaders": [
+        "Content-Length",
+        "Content-Type",
+        "Content-Disposition"
+    ],
+    "maxage:Integer": 86400,
+    "supportedheaders": [
+        "Authorization",
+        "Origin",
+        "Accept",
+        "X-Requested-With",
+        "Content-Type",
+        "Access-Control-Request-Method",
+        "Access-Control-Request-Headers",
+        "x-api-key",
+        "x-gw-ims-org-id"
+    ],
+    "supportedmethods": [
+        "GET",
+        "HEAD",
+        "POST",
+        "PUT",
+        "DELETE",
+        "OPTIONS"
+    ],
+    "supportscredentials": true
+}

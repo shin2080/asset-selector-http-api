@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEM Asset Selector & HTTP API Demo</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Adobe Asset Selector -->
+    <script src="https://experience.adobe.com/solutions/CQ-assets-selectors/static-assets/resources/assets-selectors.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <h1>Adobe AEM Cloud Asset Demo</h1>
+            <nav class="nav">
+                <button class="nav-btn active" data-page="selector">Asset Selector</button>
+                <button class="nav-btn" data-page="api">HTTP API</button>
+                <button class="nav-btn" data-page="settings">Settings</button>
+            </nav>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Asset Selector Page -->
+            <section id="page-selector" class="page active">
+                <div class="page-header">
+                    <h2>Asset Selector</h2>
+                    <p>Adobe Experience Manager Cloud의 Asset Selector를 사용하여 에셋을 검색하고 선택합니다.</p>
+                </div>
+
+                <div class="selector-page-container">
+                    <!-- Controls -->
+                    <div class="selector-controls">
+                        <div class="control-group">
+                            <label>View Mode</label>
+                            <select id="selector-view-mode">
+                                <option value="modal">Modal (Dialog)</option>
+                                <option value="rail">Rail (Embedded)</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>Selection Type</label>
+                            <select id="selector-selection-type">
+                                <option value="multiple">Multiple</option>
+                                <option value="single">Single</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>Color Scheme</label>
+                            <select id="selector-color-scheme">
+                                <option value="light">Light</option>
+                                <option value="dark">Dark</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>Filter by MIME Type</label>
+                            <select id="selector-mime-filter">
+                                <option value="">All Types</option>
+                                <option value="image/*">Images</option>
+                                <option value="video/*">Videos</option>
+                                <option value="application/pdf">PDF</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" id="open-asset-selector-btn">Open Asset Selector</button>
+                        <button class="btn btn-secondary" id="render-rail-selector-btn">Render Rail View</button>
+                    </div>
+
+                    <!-- Asset Selector Container (for Rail view) -->
+                    <div class="selector-main">
+                        <div id="asset-selector-container" class="asset-selector-wrapper">
+                            <div class="selector-placeholder">
+                                <p>Click "Open Asset Selector" for modal view or "Render Rail View" for embedded view</p>
+                            </div>
+                        </div>
+
+                        <!-- Selected Assets Panel -->
+                        <div class="selected-assets-panel">
+                            <h3>Selected Assets <span id="selected-count-badge">0</span></h3>
+                            <div id="selected-assets-list" class="selected-assets-list">
+                                <p class="no-selection">No assets selected</p>
+                            </div>
+                            <div class="selected-actions" id="selected-actions" style="display: none;">
+                                <button class="btn btn-primary" id="use-selected-assets">Use Selected Assets</button>
+                                <button class="btn btn-secondary" id="clear-selected-assets">Clear All</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Code Examples -->
+                    <div class="code-examples-panel">
+                        <h3>Integration Code</h3>
+                        <div class="tabs">
+                            <button class="tab-btn active" data-tab="code-init">Initialize</button>
+                            <button class="tab-btn" data-tab="code-modal">Modal View</button>
+                            <button class="tab-btn" data-tab="code-rail">Rail View</button>
+                            <button class="tab-btn" data-tab="code-filter">Filters</button>
+                        </div>
+                        <div class="code-viewer" id="code-viewer">
+                            <div class="code-tab active" id="code-init">
+<pre><code>// 1. Include the Asset Selector script
+&lt;script src="https://experience.adobe.com/solutions/CQ-assets-selectors/static-assets/resources/assets-selectors.js"&gt;&lt;/script&gt;
+
+// 2. Define IMS configuration
+const imsProps = {
+    imsClientId: "your-client-id",
+    imsScope: "openid,AdobeID,read_organizations",
+    redirectUrl: window.location.href,
+    modalMode: true,
+    onImsServiceInitialized: (service) => {
+        console.log("IMS initialized");
+    },
+    onAccessTokenReceived: (token) => {
+        console.log("Token received");
+    }
+};
+
+// 3. Register authentication service
+const authService = PureJSSelectors.registerAssetsSelectorsAuthService(imsProps);</code></pre>
+                            </div>
+                            <div class="code-tab" id="code-modal">
+<pre><code>// Render Asset Selector in Modal (Dialog) view
+function openAssetSelectorModal() {
+    const props = {
+        imsOrg: "YOUR_ORG@AdobeOrg",
+        repositoryId: "delivery-pXXXXX-eXXXXXX.adobeaemcloud.com",
+        onClose: () => {
+            console.log("Modal closed");
+        },
+        handleSelection: (assets) => {
+            console.log("Selected assets:", assets);
+            assets.forEach(asset => {
+                console.log("Name:", asset.name);
+                console.log("Path:", asset["repo:path"]);
+                console.log("Format:", asset["dc:format"]);
+            });
+        },
+        filterSchema: [
+            { header: "File Type", groupKey: "TopGroup", fields: [
+                { element: "checkbox", name: "type", options: [
+                    { label: "Images", value: "image/*" },
+                    { label: "Videos", value: "video/*" }
+                ]}
+            ]}
+        ]
+    };
+
+    PureJSSelectors.renderAssetSelectorWithAuthFlow(
+        document.body,
+        props,
+        () => console.log("Rendered")
+    );
+}</code></pre>
+                            </div>
+                            <div class="code-tab" id="code-rail">
+<pre><code>// Render Asset Selector in Rail (Embedded) view
+function renderAssetSelectorRail() {
+    const container = document.getElementById("asset-selector-container");
+
+    const props = {
+        imsOrg: "YOUR_ORG@AdobeOrg",
+        repositoryId: "delivery-pXXXXX-eXXXXXX.adobeaemcloud.com",
+        rail: true,  // Enable rail view
+        hideTreeNav: false,  // Show tree navigation
+        selectionType: "multiple",
+        handleAssetSelection: (asset) => {
+            // Called on each selection/deselection
+            console.log("Asset selected:", asset);
+        },
+        acvConfig: {
+            selectionType: "multiple"
+        }
+    };
+
+    PureJSSelectors.renderAssetSelectorWithAuthFlow(
+        container,
+        props,
+        () => console.log("Rail view rendered")
+    );
+}</code></pre>
+                            </div>
+                            <div class="code-tab" id="code-filter">
+<pre><code>// Configure custom filters
+const props = {
+    // ... other props
+    filterSchema: [
+        {
+            header: "File Type",
+            groupKey: "FileTypeGroup",
+            fields: [
+                {
+                    element: "checkbox",
+                    name: "type",
+                    defaultValue: ["image/*"],
+                    options: [
+                        { label: "Images", value: "image/*" },
+                        { label: "Documents", value: "application/pdf" },
+                        { label: "Videos", value: "video/*" }
+                    ]
+                }
+            ]
+        },
+        {
+            header: "File Size",
+            groupKey: "SizeGroup",
+            fields: [
+                {
+                    element: "range",
+                    name: "size",
+                    min: 0,
+                    max: 104857600,  // 100MB
+                    step: 1048576    // 1MB
+                }
+            ]
+        }
+    ],
+    filterFormProps: {
+        searchContent: true,
+        filterByMimeType: ["image/png", "image/jpeg", "image/gif"]
+    }
+};</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- HTTP API Page -->
+            <section id="page-api" class="page">
+                <div class="page-header">
+                    <h2>HTTP API</h2>
+                    <p>AEM Asset HTTP API를 사용하여 에셋을 관리합니다.</p>
+                </div>
+
+                <div class="api-container">
+                    <!-- API Operations -->
+                    <div class="api-operations">
+                        <!-- List Assets -->
+                        <div class="api-card">
+                            <h3>List Assets</h3>
+                            <p>특정 경로의 에셋 리스트를 가져옵니다.</p>
+                            <div class="form-group">
+                                <label>Path</label>
+                                <input type="text" id="list-path" value="/content/dam" placeholder="/content/dam/folder" autocomplete="off">
+                            </div>
+                            <div class="form-group">
+                                <label>Limit</label>
+                                <input type="number" id="list-limit" value="20">
+                            </div>
+                            <button class="btn btn-primary" id="list-assets-btn">Get List</button>
+                            <div class="api-result" id="list-result"></div>
+                        </div>
+
+                        <!-- Upload Asset -->
+                        <div class="api-card">
+                            <h3>Upload Asset</h3>
+                            <p>에셋을 지정된 위치에 업로드합니다.</p>
+                            <div class="form-group">
+                                <label>Upload Path</label>
+                                <input type="text" id="upload-path" placeholder="/content/dam/uploads">
+                            </div>
+                            <div class="form-group">
+                                <label>Select File</label>
+                                <input type="file" id="upload-file" multiple>
+                            </div>
+                            <div class="upload-preview" id="upload-preview"></div>
+                            <button class="btn btn-primary" id="upload-btn">Upload</button>
+                            <div class="progress-bar" id="upload-progress" style="display: none;">
+                                <div class="progress-fill"></div>
+                                <span class="progress-text">0%</span>
+                            </div>
+                            <div class="api-result" id="upload-result"></div>
+                        </div>
+
+                        <!-- Download Asset -->
+                        <div class="api-card">
+                            <h3>Download Asset</h3>
+                            <p>에셋을 다운로드합니다.</p>
+                            <div class="form-group">
+                                <label>Asset Path</label>
+                                <input type="text" id="download-path" placeholder="/content/dam/image.jpg">
+                            </div>
+                            <div class="form-group">
+                                <label>Rendition</label>
+                                <select id="download-rendition">
+                                    <option value="original">Original</option>
+                                    <option value="web">Web Optimized</option>
+                                    <option value="thumbnail">Thumbnail</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-primary" id="download-btn">Download</button>
+                            <div class="api-result" id="download-result"></div>
+                        </div>
+
+                        <!-- Get Metadata -->
+                        <div class="api-card">
+                            <h3>Get Metadata Schema</h3>
+                            <p>에셋의 메타데이터 스키마를 가져옵니다.</p>
+                            <div class="form-group">
+                                <label>Asset Path</label>
+                                <input type="text" id="meta-get-path" placeholder="/content/dam/image.jpg">
+                            </div>
+                            <button class="btn btn-primary" id="get-meta-btn">Get Metadata</button>
+                            <div class="api-result" id="meta-get-result"></div>
+                        </div>
+
+                        <!-- Update Metadata -->
+                        <div class="api-card">
+                            <h3>Update Metadata</h3>
+                            <p>에셋의 메타데이터를 업데이트합니다.</p>
+                            <div class="form-group">
+                                <label>Asset Path</label>
+                                <input type="text" id="meta-update-path" placeholder="/content/dam/image.jpg">
+                            </div>
+                            <div class="form-group">
+                                <label>Metadata (JSON)</label>
+                                <textarea id="meta-update-json" rows="6" placeholder='{
+  "dc:title": "New Title",
+  "dc:description": "Description"
+}'></textarea>
+                            </div>
+                            <button class="btn btn-primary" id="update-meta-btn">Update Metadata</button>
+                            <div class="api-result" id="meta-update-result"></div>
+                        </div>
+                    </div>
+
+                    <!-- API Documentation -->
+                    <aside class="api-docs">
+                        <h3>API Documentation</h3>
+                        <div class="doc-section">
+                            <h4>Endpoints</h4>
+                            <div class="endpoint">
+                                <code>GET /api/assets/{path}</code>
+                                <p>List assets in a folder</p>
+                            </div>
+                            <div class="endpoint">
+                                <code>POST /api/assets/{path}</code>
+                                <p>Upload a new asset</p>
+                            </div>
+                            <div class="endpoint">
+                                <code>GET /api/assets/{path}.json</code>
+                                <p>Get asset metadata</p>
+                            </div>
+                            <div class="endpoint">
+                                <code>PUT /api/assets/{path}</code>
+                                <p>Update asset metadata</p>
+                            </div>
+                            <div class="endpoint">
+                                <code>DELETE /api/assets/{path}</code>
+                                <p>Delete an asset</p>
+                            </div>
+                        </div>
+
+                        <h4>Sample Code</h4>
+                        <div class="code-viewer">
+<pre><code>// AEM Asset HTTP API Client
+const aemApi = new AEMAssetAPI({
+    host: 'https://author-xxx.adobeaemcloud.com',
+    token: 'YOUR_ACCESS_TOKEN'
+});
+
+// List assets
+const assets = await aemApi.listAssets(
+    '/content/dam/my-folder',
+    { limit: 20 }
+);
+
+// Upload asset
+const result = await aemApi.uploadAsset(
+    file,
+    '/content/dam/uploads'
+);
+
+// Get metadata
+const metadata = await aemApi.getMetadata(
+    '/content/dam/image.jpg'
+);
+
+// Update metadata
+await aemApi.updateMetadata(
+    '/content/dam/image.jpg',
+    {
+        'dc:title': 'New Title',
+        'dc:description': 'Updated'
+    }
+);
+
+// Download asset
+const blob = await aemApi.downloadAsset(
+    '/content/dam/image.jpg',
+    'original'
+);</code></pre>
+                        </div>
+                    </aside>
+                </div>
+            </section>
+
+            <!-- Settings Page -->
+            <section id="page-settings" class="page">
+                <div class="page-header">
+                    <h2>Settings</h2>
+                    <p>AEM Cloud 연결 및 API 설정을 구성합니다.</p>
+                </div>
+
+                <div class="settings-container">
+                    <div class="settings-card">
+                        <h3>Server Configuration</h3>
+                        <div class="form-group">
+                            <label>AEM Host URL</label>
+                            <input type="url" id="settings-host" placeholder="https://author-xxx.adobeaemcloud.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Delivery URL</label>
+                            <input type="url" id="settings-delivery" placeholder="https://delivery-xxx.adobeaemcloud.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Repository ID</label>
+                            <input type="text" id="settings-repo-id" placeholder="your-repository-id">
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3>Authentication</h3>
+                        <div class="form-group">
+                            <label>IMS Organization ID</label>
+                            <input type="text" id="settings-ims-org" placeholder="YOUR_ORG@AdobeOrg">
+                        </div>
+                        <div class="form-group">
+                            <label>API Key (Client ID)</label>
+                            <input type="text" id="settings-api-key" placeholder="cm-pXXXXX-eXXXXXX-integration-X">
+                        </div>
+                        <div class="form-group">
+                            <label>Client Secret</label>
+                            <input type="password" id="settings-client-secret" placeholder="client-secret">
+                        </div>
+                        <div class="form-group">
+                            <label>Technical Account ID</label>
+                            <input type="text" id="settings-tech-account" placeholder="XXXXX@techacct.adobe.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Technical Account Email</label>
+                            <input type="text" id="settings-tech-email" placeholder="xxxxx@techacct.adobe.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Private Key (PEM)</label>
+                            <textarea id="settings-private-key" rows="6" placeholder="-----BEGIN RSA PRIVATE KEY-----
+...
+-----END RSA PRIVATE KEY-----"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>IMS Endpoint</label>
+                            <input type="text" id="settings-ims-endpoint" value="ims-na1.adobelogin.com" placeholder="ims-na1.adobelogin.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Metascopes</label>
+                            <input type="text" id="settings-metascopes" value="ent_aem_cloud_api" placeholder="ent_aem_cloud_api">
+                        </div>
+                        <div class="token-generate-section">
+                            <button class="btn btn-primary" id="generate-token-btn">Generate Access Token</button>
+                            <div class="token-status" id="token-status"></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Access Token <span class="token-expiry" id="token-expiry"></span></label>
+                            <textarea id="settings-token" rows="3" placeholder="Paste access token here or click 'Generate Access Token'"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3>Path Configuration</h3>
+                        <div class="form-group">
+                            <label>Default Browse Path</label>
+                            <input type="text" id="settings-browse-path" placeholder="/content/dam">
+                        </div>
+                        <div class="form-group">
+                            <label>Upload Destination</label>
+                            <input type="text" id="settings-upload-path" placeholder="/content/dam/uploads">
+                        </div>
+                        <div class="form-group">
+                            <label>Download Location (Server)</label>
+                            <input type="text" id="settings-download-path" placeholder="/var/downloads">
+                        </div>
+                        <div class="form-group">
+                            <label>Save Selected Assets To</label>
+                            <input type="text" id="settings-save-path" placeholder="/content/dam/selected">
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3>Asset Selector Configuration</h3>
+                        <div class="form-group">
+                            <label>Environment</label>
+                            <select id="settings-env">
+                                <option value="PROD">Production</option>
+                                <option value="STAGE">Stage</option>
+                                <option value="DEV">Development</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Selection Mode</label>
+                            <select id="settings-selection-mode">
+                                <option value="multiple">Multiple Selection</option>
+                                <option value="single">Single Selection</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Default View</label>
+                            <select id="settings-view">
+                                <option value="grid">Grid View</option>
+                                <option value="list">List View</option>
+                            </select>
+                        </div>
+                        <div class="form-group checkbox-inline">
+                            <label>
+                                <input type="checkbox" id="settings-show-metadata" checked>
+                                Show Metadata Panel
+                            </label>
+                        </div>
+                        <div class="form-group checkbox-inline">
+                            <label>
+                                <input type="checkbox" id="settings-show-filters" checked>
+                                Show Filter Panel
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3>API Options</h3>
+                        <div class="form-group">
+                            <label>Request Timeout (ms)</label>
+                            <input type="number" id="settings-timeout" value="30000">
+                        </div>
+                        <div class="form-group">
+                            <label>Max Upload Size (MB)</label>
+                            <input type="number" id="settings-max-upload" value="100">
+                        </div>
+                        <div class="form-group checkbox-inline">
+                            <label>
+                                <input type="checkbox" id="settings-auto-refresh" checked>
+                                Auto Refresh Token
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-actions">
+                        <button class="btn btn-primary" id="save-settings">Save Settings</button>
+                        <button class="btn btn-secondary" id="reset-settings">Reset to Defaults</button>
+                        <button class="btn btn-secondary" id="test-connection">Test Connection</button>
+                        <button class="btn btn-secondary" id="export-settings">Export Config</button>
+                        <button class="btn btn-secondary" id="import-settings">Import Config</button>
+                        <input type="file" id="import-config-file" accept=".json" style="display: none;">
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Toast Notifications -->
+        <div class="toast-container" id="toast-container"></div>
+
+        <!-- Modal -->
+        <div class="modal" id="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modal-title">Modal Title</h3>
+                    <button class="modal-close" id="modal-close">&times;</button>
+                </div>
+                <div class="modal-body" id="modal-body"></div>
+                <div class="modal-footer" id="modal-footer"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/token-generator.js"></script>
+    <script src="js/api-client.js"></script>
+    <script src="js/asset-selector.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
