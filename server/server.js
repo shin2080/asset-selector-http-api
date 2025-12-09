@@ -51,6 +51,8 @@ const server = http.createServer((req, res) => {
     const parsedUrl = url.parse(req.url, true);
     let urlPath = parsedUrl.pathname;
 
+    console.log(`[Request] ${req.method} ${urlPath}`);
+
     // ENV file API
     if (urlPath === '/api/env') {
         handleEnvApi(req, res);
@@ -350,8 +352,8 @@ function handleDownloadToServer(req, res) {
             } else if (rendition === 'thumbnail') {
                 downloadUrl = `${aemHost}/api/assets${assetApiPath}/renditions/cq5dam.thumbnail.319.319.png`;
             } else {
-                // Original
-                downloadUrl = `${aemHost}/api/assets${assetApiPath}/original`;
+                // Original - use content path directly for binary download
+                downloadUrl = `${aemHost}${assetPath}/jcr:content/renditions/original`;
             }
 
             console.log(`[Download to Server] Downloading from: ${downloadUrl}`);
@@ -385,6 +387,8 @@ function handleDownloadToServer(req, res) {
             }
 
             const downloadReq = https.request(options, (downloadRes) => {
+                console.log(`[Download to Server] Response status: ${downloadRes.statusCode}`);
+
                 // Handle redirect
                 if (downloadRes.statusCode >= 300 && downloadRes.statusCode < 400 && downloadRes.headers.location) {
                     console.log(`[Download to Server] Redirecting to: ${downloadRes.headers.location}`);
