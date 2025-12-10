@@ -376,9 +376,40 @@
     }
 
     /**
+     * Setup API tab switching
+     */
+    function setupApiTabs() {
+        const tabButtons = document.querySelectorAll('.api-tab-btn');
+
+        tabButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tabId = btn.dataset.apiTab;
+
+                // Update tab buttons
+                document.querySelectorAll('.api-tab-btn').forEach(b => {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+
+                // Update tab content
+                document.querySelectorAll('.api-tab-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+                const targetTab = document.getElementById(`api-tab-${tabId}`);
+                if (targetTab) {
+                    targetTab.classList.add('active');
+                }
+            });
+        });
+    }
+
+    /**
      * Setup HTTP API page
      */
     function setupApiPage() {
+        // Setup API tab switching
+        setupApiTabs();
+
         // List Assets
         document.getElementById('list-assets-btn').addEventListener('click', () => {
             listAssets();
@@ -463,8 +494,8 @@
             const fileType = Utils.getFileType(asset.mimeType);
             const icon = Utils.getFileIcon(fileType);
             const isImage = fileType === 'image';
-            const config = configManager.getConfig();
-            const thumbUrl = isImage ? `${config.server.host}/api/assets${asset.path.replace('/content/dam', '')}/renditions/cq5dam.thumbnail.140.100.png` : '';
+            // Use proxy endpoint for thumbnail to avoid CORS issues
+            const thumbUrl = isImage ? `/api/thumbnail?path=${encodeURIComponent(asset.path)}` : '';
 
             return `
                 <div class="asset-list-card" data-path="${Utils.escapeHtml(asset.path)}">
@@ -476,6 +507,7 @@
                     </div>
                     <div class="asset-list-info">
                         <div class="asset-list-name" title="${Utils.escapeHtml(asset.name)}">${Utils.escapeHtml(asset.name)}</div>
+                        <div class="asset-list-path">${Utils.escapeHtml(asset.path)}</div>
                         <div class="asset-list-meta">
                             ${asset.mimeType || 'Unknown type'}
                             ${asset.size ? ' • ' + Utils.formatFileSize(asset.size) : ''}

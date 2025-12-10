@@ -83,6 +83,18 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // AEM Thumbnail proxy (for displaying thumbnails in asset list)
+    if (urlPath === '/api/thumbnail') {
+        handleThumbnailProxy(req, res, parsedUrl.query);
+        return;
+    }
+
+    // AEM Update Metadata proxy
+    if (urlPath === '/api/update-metadata') {
+        handleUpdateMetadata(req, res);
+        return;
+    }
+
     // Default to index.html
     if (urlPath === '/') {
         urlPath = '/index.html';
@@ -117,11 +129,92 @@ const server = http.createServer((req, res) => {
 });
 
 /**
- * Handle AEM API proxy for GET requests
- * (For paths blocked by CORS like /content/dam/...)
+ * Handle AEM API proxy for requests
+ * Supports both header-based (GET) and body-based (POST with method override) requests
  */
 function handleAEMApiProxy(req, res) {
-    // Get target URL and auth headers from request headers
+    // Check if this is a body-based request (POST with JSON body)
+    if (req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+
+        req.on('end', () => {
+            try {
+                const params = JSON.parse(body);
+                const { aemHost, endpoint, method, authorization, apiKey, contentType, body: requestBody } = params;
+
+                if (!aemHost || !endpoint) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'Missing aemHost or endpoint' }));
+                    return;
+                }
+
+                const targetUrl = `${aemHost}${endpoint}`;
+                console.log(`[AEM API Proxy] ${method || 'GET'} ${targetUrl}`);
+
+                const parsedTarget = new URL(targetUrl);
+
+                const options = {
+                    hostname: parsedTarget.hostname,
+                    port: 443,
+                    path: parsedTarget.pathname + parsedTarget.search,
+                    method: method || 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                };
+
+                if (authorization) {
+                    options.headers['Authorization'] = authorization;
+                }
+                if (apiKey) {
+                    options.headers['x-api-key'] = apiKey;
+                }
+                if (contentType) {
+                    options.headers['Content-Type'] = contentType;
+                }
+                if (requestBody) {
+                    options.headers['Content-Length'] = Buffer.byteLength(requestBody);
+                }
+
+                const proxyReq = https.request(options, (proxyRes) => {
+                    let responseBody = [];
+                    proxyRes.on('data', chunk => {
+                        responseBody.push(chunk);
+                    });
+                    proxyRes.on('end', () => {
+                        const responseData = Buffer.concat(responseBody);
+                        console.log(`[AEM API Proxy] Response: ${proxyRes.statusCode}`);
+
+                        res.writeHead(proxyRes.statusCode, {
+                            'Content-Type': proxyRes.headers['content-type'] || 'application/json'
+                        });
+                        res.end(responseData);
+                    });
+                });
+
+                proxyReq.on('error', (err) => {
+                    console.error('[AEM API Proxy Error]', err.message);
+                    res.writeHead(502);
+                    res.end(JSON.stringify({ error: 'AEM proxy error: ' + err.message }));
+                });
+
+                if (requestBody) {
+                    proxyReq.write(requestBody);
+                }
+                proxyReq.end();
+
+            } catch (e) {
+                res.writeHead(400);
+                res.end(JSON.stringify({ error: 'Invalid JSON: ' + e.message }));
+            }
+        });
+        return;
+    }
+
+    // Header-based request (legacy GET support)
     const targetUrl = req.headers['x-target-url'];
     const authorization = req.headers['authorization'];
     const apiKey = req.headers['x-api-key'];
@@ -469,6 +562,279 @@ function handleDownloadResponse(downloadRes, savePath, filename, res) {
         res.writeHead(500);
         res.end(JSON.stringify({ error: 'Failed to save file: ' + err.message }));
     });
+}
+
+/**
+ * Handle thumbnail proxy (proxy AEM thumbnails to avoid CORS)
+ */
+function handleThumbnailProxy(req, res, query) {
+    const assetPath = query.path;
+
+    if (!assetPath) {
+        res.writeHead(400);
+        res.end('Missing path parameter');
+        return;
+    }
+
+    // Load config from .env
+    let envConfig = {};
+    try {
+        if (fs.existsSync(ENV_FILE_PATH)) {
+            const envContent = fs.readFileSync(ENV_FILE_PATH, 'utf8');
+            envConfig = parseEnvFile(envContent);
+        }
+    } catch (e) {
+        console.error('[Thumbnail Proxy] Failed to load .env:', e.message);
+    }
+
+    const aemHost = envConfig.AEM_HOST;
+    const accessToken = envConfig.ACCESS_TOKEN;
+    const apiKey = envConfig.API_KEY;
+
+    if (!aemHost) {
+        res.writeHead(500);
+        res.end('AEM_HOST not configured');
+        return;
+    }
+
+    // Build thumbnail URL
+    const assetApiPath = assetPath.replace('/content/dam', '');
+    const thumbnailUrl = `${aemHost}/api/assets${assetApiPath}/renditions/cq5dam.thumbnail.140.100.png`;
+
+    console.log(`[Thumbnail Proxy] Fetching: ${thumbnailUrl}`);
+
+    const parsedUrl = new URL(thumbnailUrl);
+
+    const options = {
+        hostname: parsedUrl.hostname,
+        port: 443,
+        path: parsedUrl.pathname,
+        method: 'GET',
+        headers: {}
+    };
+
+    if (accessToken) {
+        options.headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+    if (apiKey) {
+        options.headers['x-api-key'] = apiKey;
+    }
+
+    const proxyReq = https.request(options, (proxyRes) => {
+        // Set CORS and cache headers
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+
+        if (proxyRes.statusCode !== 200) {
+            // Return a placeholder or 404
+            res.writeHead(404);
+            res.end();
+            return;
+        }
+
+        res.writeHead(200, {
+            'Content-Type': proxyRes.headers['content-type'] || 'image/png'
+        });
+
+        proxyRes.pipe(res);
+    });
+
+    proxyReq.on('error', (err) => {
+        console.error('[Thumbnail Proxy Error]', err.message);
+        res.writeHead(502);
+        res.end('Proxy error');
+    });
+
+    proxyReq.end();
+}
+
+/**
+ * Handle Update Metadata proxy
+ * PUT /api/assets/{path} with {"class":"asset", "properties":{...}}
+ *
+ * Response codes:
+ * 200 - OK - Asset updated successfully
+ * 404 - NOT FOUND - Asset not found
+ * 412 - PRECONDITION FAILED - Root collection not found
+ * 500 - INTERNAL SERVER ERROR
+ */
+function handleUpdateMetadata(req, res) {
+    if (req.method !== 'PUT') {
+        res.writeHead(405);
+        res.end(JSON.stringify({ error: 'Method not allowed. Use PUT.' }));
+        return;
+    }
+
+    let body = '';
+    req.on('data', chunk => {
+        body += chunk.toString();
+    });
+
+    req.on('end', () => {
+        try {
+            const { aemHost, assetPath, authorization, apiKey, metadata } = JSON.parse(body);
+
+            if (!aemHost || !assetPath || !metadata) {
+                res.writeHead(400);
+                res.end(JSON.stringify({ error: 'Missing required fields: aemHost, assetPath, metadata' }));
+                return;
+            }
+
+            const parsedHostUrl = new URL(aemHost);
+
+            // Step 1: Get CSRF token first
+            console.log(`[Update Metadata] Getting CSRF token from ${aemHost}`);
+
+            const csrfOptions = {
+                hostname: parsedHostUrl.hostname,
+                port: 443,
+                path: '/libs/granite/csrf/token.json',
+                method: 'GET',
+                headers: {}
+            };
+
+            if (authorization) {
+                csrfOptions.headers['Authorization'] = authorization;
+            }
+            if (apiKey) {
+                csrfOptions.headers['x-api-key'] = apiKey;
+            }
+
+            const csrfReq = https.request(csrfOptions, (csrfRes) => {
+                let csrfBody = '';
+                csrfRes.on('data', chunk => {
+                    csrfBody += chunk.toString();
+                });
+
+                csrfRes.on('end', () => {
+                    let csrfToken = '';
+
+                    if (csrfRes.statusCode === 200) {
+                        try {
+                            const csrfData = JSON.parse(csrfBody);
+                            csrfToken = csrfData.token;
+                            console.log(`[Update Metadata] Got CSRF token: ${csrfToken.substring(0, 20)}...`);
+                        } catch (e) {
+                            console.log(`[Update Metadata] Failed to parse CSRF token, continuing without it`);
+                        }
+                    } else {
+                        console.log(`[Update Metadata] CSRF token request returned ${csrfRes.statusCode}, continuing without it`);
+                    }
+
+                    // Step 2: Now update the metadata
+                    updateAssetMetadata(aemHost, assetPath, authorization, apiKey, metadata, csrfToken, res);
+                });
+            });
+
+            csrfReq.on('error', (err) => {
+                console.error('[Update Metadata] CSRF token error:', err.message);
+                // Continue without CSRF token
+                updateAssetMetadata(aemHost, assetPath, authorization, apiKey, metadata, '', res);
+            });
+
+            csrfReq.end();
+
+        } catch (e) {
+            console.error('[Update Metadata Error]', e.message);
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Invalid request: ' + e.message }));
+        }
+    });
+}
+
+/**
+ * Update asset metadata with optional CSRF token
+ */
+function updateAssetMetadata(aemHost, assetPath, authorization, apiKey, metadata, csrfToken, res) {
+    const aemUrl = `${aemHost}/api/assets${assetPath}`;
+    console.log(`[Update Metadata] PUT ${aemUrl}`);
+
+    const parsedUrl = new URL(aemUrl);
+
+    // Request body as per AEM API spec
+    const requestBody = JSON.stringify({
+        class: 'asset',
+        properties: metadata
+    });
+
+    const options = {
+        hostname: parsedUrl.hostname,
+        port: 443,
+        path: parsedUrl.pathname,
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(requestBody)
+        }
+    };
+
+    if (authorization) {
+        options.headers['Authorization'] = authorization;
+    }
+    if (apiKey) {
+        options.headers['x-api-key'] = apiKey;
+    }
+    if (csrfToken) {
+        options.headers['CSRF-Token'] = csrfToken;
+    }
+
+    console.log(`[Update Metadata] Request body: ${requestBody}`);
+    console.log(`[Update Metadata] Headers: ${JSON.stringify(Object.keys(options.headers))}`);
+
+    const proxyReq = https.request(options, (proxyRes) => {
+        let responseBody = [];
+        proxyRes.on('data', chunk => {
+            responseBody.push(chunk);
+        });
+
+        proxyRes.on('end', () => {
+            const responseData = Buffer.concat(responseBody).toString();
+            console.log(`[Update Metadata] Response: ${proxyRes.statusCode}`);
+            console.log(`[Update Metadata] Response body: ${responseData}`);
+
+            // Handle response based on status code
+            if (proxyRes.statusCode === 200) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                let parsedData = null;
+                try {
+                    parsedData = responseData ? JSON.parse(responseData) : null;
+                } catch (e) {}
+                res.end(JSON.stringify({
+                    success: true,
+                    message: 'Metadata updated successfully',
+                    data: parsedData
+                }));
+            } else if (proxyRes.statusCode === 404) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    error: 'Asset not found at the provided path',
+                    statusCode: 404
+                }));
+            } else if (proxyRes.statusCode === 412) {
+                res.writeHead(412, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    error: 'Root collection cannot be found or accessed',
+                    statusCode: 412
+                }));
+            } else {
+                res.writeHead(proxyRes.statusCode, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    error: `Update failed with status ${proxyRes.statusCode}`,
+                    statusCode: proxyRes.statusCode,
+                    response: responseData
+                }));
+            }
+        });
+    });
+
+    proxyReq.on('error', (err) => {
+        console.error('[Update Metadata Error]', err.message);
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Proxy error: ' + err.message }));
+    });
+
+    proxyReq.write(requestBody);
+    proxyReq.end();
 }
 
 /**

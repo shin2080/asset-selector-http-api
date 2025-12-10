@@ -390,27 +390,33 @@ class AEMAssetAPI {
      */
     async updateMetadata(path, metadata) {
         const apiPath = this.convertToApiPath(path);
-        const endpoint = `/api/assets${apiPath}`;
+        const config = configManager.getConfig();
 
-        // Build multipart form data for metadata update
-        const formData = new FormData();
-
-        // Add metadata properties
-        Object.entries(metadata).forEach(([key, value]) => {
-            formData.append(key, value);
-        });
+        // Use dedicated metadata update proxy endpoint
+        // PUT /api/assets/myfolder/myAsset.png -H"Content-Type: application/json" -d '{"class":"asset", "properties":{"dc:title":"My Asset"}}'
+        const requestBody = {
+            aemHost: config.server.host,
+            assetPath: apiPath,
+            authorization: `Bearer ${config.auth.accessToken}`,
+            apiKey: config.auth.apiKey,
+            metadata: metadata
+        };
 
         try {
-            const result = await this.request(endpoint, {
+            const response = await fetch('/api/update-metadata', {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    class: 'asset',
-                    properties: metadata
-                })
+                body: JSON.stringify(requestBody)
             });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new APIError(result.error || `Update metadata failed: ${response.status}`, response.status);
+            }
+
             return result;
         } catch (error) {
             if (this.isDemoMode()) {

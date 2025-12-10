@@ -233,176 +233,438 @@ const props = {
                     <p>AEM Asset HTTP API를 사용하여 에셋을 관리합니다.</p>
                 </div>
 
-                <div class="api-container">
-                    <!-- API Operations -->
-                    <div class="api-operations">
-                        <!-- List Assets -->
-                        <div class="api-card">
-                            <h3>List Assets</h3>
-                            <p>특정 경로의 에셋 리스트를 가져옵니다.</p>
-                            <div class="form-group">
-                                <label>Path</label>
-                                <input type="text" id="list-path" value="/content/dam" placeholder="/content/dam/folder" autocomplete="off">
-                            </div>
-                            <div class="form-group">
-                                <label>Limit</label>
-                                <input type="number" id="list-limit" value="20">
-                            </div>
-                            <button class="btn btn-primary" id="list-assets-btn">Get List</button>
-                            <div class="api-result" id="list-result"></div>
-                        </div>
+                <!-- API Tabs -->
+                <div class="api-tabs">
+                    <button class="api-tab-btn active" data-api-tab="list">List Assets</button>
+                    <button class="api-tab-btn" data-api-tab="upload">Upload</button>
+                    <button class="api-tab-btn" data-api-tab="download">Download</button>
+                    <button class="api-tab-btn" data-api-tab="get-metadata">Get Metadata</button>
+                    <button class="api-tab-btn" data-api-tab="update-metadata">Update Metadata</button>
+                </div>
 
-                        <!-- Upload Asset -->
-                        <div class="api-card">
-                            <h3>Upload Asset</h3>
-                            <p>에셋을 지정된 위치에 업로드합니다.</p>
-                            <div class="form-group">
-                                <label>Upload Path</label>
-                                <input type="text" id="upload-path" placeholder="/content/dam/uploads">
+                <!-- List Assets Tab -->
+                <div class="api-tab-content active" id="api-tab-list">
+                    <div class="api-container">
+                        <div class="api-operations">
+                            <div class="api-card">
+                                <h3>List Assets</h3>
+                                <p>특정 경로의 에셋 리스트를 가져옵니다.</p>
+                                <div class="form-group">
+                                    <label>Path</label>
+                                    <input type="text" id="list-path" value="/content/dam" placeholder="/content/dam/folder" autocomplete="off">
+                                </div>
+                                <div class="form-group">
+                                    <label>Limit</label>
+                                    <input type="number" id="list-limit" value="20">
+                                </div>
+                                <button class="btn btn-primary" id="list-assets-btn">Get List</button>
+                                <div class="api-result" id="list-result"></div>
                             </div>
-                            <div class="form-group">
-                                <label>Select File</label>
-                                <input type="file" id="upload-file" multiple>
-                            </div>
-                            <div class="upload-preview" id="upload-preview"></div>
-                            <button class="btn btn-primary" id="upload-btn">Upload</button>
-                            <div class="progress-bar" id="upload-progress" style="display: none;">
-                                <div class="progress-fill"></div>
-                                <span class="progress-text">0%</span>
-                            </div>
-                            <div class="api-result" id="upload-result"></div>
                         </div>
+                        <aside class="api-docs">
+                            <h3>API Documentation</h3>
+                            <div class="doc-section">
+                                <h4>Endpoint</h4>
+                                <div class="endpoint">
+                                    <code>GET /api/assets/{path}.json</code>
+                                    <p>List assets in a folder</p>
+                                </div>
+                                <h4>Parameters</h4>
+                                <div class="endpoint">
+                                    <code>limit</code>
+                                    <p>Maximum number of assets to return (default: 20)</p>
+                                </div>
+                                <div class="endpoint">
+                                    <code>offset</code>
+                                    <p>Starting offset for pagination</p>
+                                </div>
+                                <div class="endpoint">
+                                    <code>orderby</code>
+                                    <p>Property to sort by (e.g., name, jcr:created)</p>
+                                </div>
+                            </div>
+                            <h4>Sample Code</h4>
+                            <div class="code-viewer">
+<pre><code>// List assets in a folder
+const response = await fetch(
+    'https://author-xxx.adobeaemcloud.com/api/assets/my-folder.json?limit=20',
+    {
+        headers: {
+            'Authorization': 'Bearer ' + accessToken,
+            'x-api-key': apiKey
+        }
+    }
+);
 
-                        <!-- Download Asset -->
-                        <div class="api-card">
-                            <h3>Download Asset</h3>
-                            <p>에셋을 다운로드합니다.</p>
-                            <div class="form-group">
-                                <label>Asset Path</label>
-                                <input type="text" id="download-path" placeholder="/content/dam/image.jpg">
+const data = await response.json();
+console.log(data.entities); // Array of assets
+
+// Using AEMAssetAPI client
+const result = await aemApi.listAssets(
+    '/content/dam/my-folder',
+    { limit: 20, offset: 0 }
+);</code></pre>
                             </div>
-                            <div class="form-group">
-                                <label>Rendition</label>
-                                <select id="download-rendition">
-                                    <option value="original">Original</option>
-                                    <option value="web">Web Optimized</option>
-                                    <option value="thumbnail">Thumbnail</option>
-                                </select>
+                        </aside>
+                    </div>
+                </div>
+
+                <!-- Upload Tab -->
+                <div class="api-tab-content" id="api-tab-upload">
+                    <div class="api-container">
+                        <div class="api-operations">
+                            <div class="api-card">
+                                <h3>Upload Asset</h3>
+                                <p>에셋을 지정된 위치에 업로드합니다.</p>
+                                <div class="form-group">
+                                    <label>Upload Path</label>
+                                    <input type="text" id="upload-path" placeholder="/content/dam/uploads">
+                                </div>
+                                <div class="form-group">
+                                    <label>Select File</label>
+                                    <input type="file" id="upload-file" multiple>
+                                </div>
+                                <div class="upload-preview" id="upload-preview"></div>
+                                <button class="btn btn-primary" id="upload-btn">Upload</button>
+                                <div class="progress-bar" id="upload-progress" style="display: none;">
+                                    <div class="progress-fill"></div>
+                                    <span class="progress-text">0%</span>
+                                </div>
+                                <div class="api-result" id="upload-result"></div>
                             </div>
-                            <div class="form-group">
-                                <label>Download To</label>
-                                <select id="download-destination">
-                                    <option value="browser">Browser (로컬 PC)</option>
-                                    <option value="server">Server (서버 디렉토리)</option>
-                                </select>
-                                <small class="form-hint" id="download-path-hint" style="display: none; color: #666; margin-top: 4px;">
-                                    저장 위치: <span id="server-download-path"></span>
-                                </small>
-                            </div>
-                            <button class="btn btn-primary" id="download-btn">Download</button>
-                            <div class="api-result" id="download-result"></div>
                         </div>
-
-                        <!-- Get Metadata -->
-                        <div class="api-card">
-                            <h3>Get Metadata Schema</h3>
-                            <p>에셋의 메타데이터 스키마를 가져옵니다.</p>
-                            <div class="form-group">
-                                <label>Asset Path</label>
-                                <input type="text" id="meta-get-path" placeholder="/content/dam/image.jpg">
+                        <aside class="api-docs">
+                            <h3>API Documentation</h3>
+                            <div class="doc-section">
+                                <h4>Endpoint</h4>
+                                <div class="endpoint">
+                                    <code>PUT /api/assets/{path}/{filename}</code>
+                                    <p>Upload a new asset (binary)</p>
+                                </div>
+                                <div class="endpoint">
+                                    <code>POST /api/assets/{path}</code>
+                                    <p>Create asset with metadata (multipart)</p>
+                                </div>
+                                <h4>Headers</h4>
+                                <div class="endpoint">
+                                    <code>Content-Type</code>
+                                    <p>MIME type of the file (e.g., image/jpeg)</p>
+                                </div>
                             </div>
-                            <button class="btn btn-primary" id="get-meta-btn">Get Metadata</button>
-                            <div class="api-result" id="meta-get-result"></div>
+                            <h4>Sample Code</h4>
+                            <div class="code-viewer">
+<pre><code>// Upload using PUT (binary)
+const file = document.getElementById('fileInput').files[0];
+
+const response = await fetch(
+    'https://author-xxx.adobeaemcloud.com/api/assets/uploads/' + file.name,
+    {
+        method: 'PUT',
+        headers: {
+            'Authorization': 'Bearer ' + accessToken,
+            'x-api-key': apiKey,
+            'Content-Type': file.type
+        },
+        body: file
+    }
+);
+
+// Using AEMAssetAPI client
+const result = await aemApi.uploadAsset(
+    file,
+    '/content/dam/uploads',
+    (progress) => console.log(progress + '%')
+);</code></pre>
+                            </div>
+                        </aside>
+                    </div>
+                </div>
+
+                <!-- Download Tab -->
+                <div class="api-tab-content" id="api-tab-download">
+                    <div class="api-container">
+                        <div class="api-operations">
+                            <div class="api-card">
+                                <h3>Download Asset</h3>
+                                <p>에셋을 다운로드합니다.</p>
+                                <div class="form-group">
+                                    <label>Asset Path</label>
+                                    <input type="text" id="download-path" placeholder="/content/dam/image.jpg">
+                                </div>
+                                <div class="form-group">
+                                    <label>Rendition</label>
+                                    <select id="download-rendition">
+                                        <option value="original">Original</option>
+                                        <option value="web">Web Optimized</option>
+                                        <option value="thumbnail">Thumbnail</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Download To</label>
+                                    <select id="download-destination">
+                                        <option value="browser">Browser (로컬 PC)</option>
+                                        <option value="server">Server (서버 디렉토리)</option>
+                                    </select>
+                                    <small class="form-hint" id="download-path-hint" style="display: none; color: #666; margin-top: 4px;">
+                                        저장 위치: <span id="server-download-path"></span>
+                                    </small>
+                                </div>
+                                <button class="btn btn-primary" id="download-btn">Download</button>
+                                <div class="api-result" id="download-result"></div>
+                            </div>
                         </div>
-
-                        <!-- Update Metadata -->
-                        <div class="api-card">
-                            <h3>Update Metadata</h3>
-                            <p>에셋의 메타데이터를 업데이트합니다.</p>
-                            <div class="form-group">
-                                <label>Asset Path</label>
-                                <input type="text" id="meta-update-path" placeholder="/content/dam/image.jpg">
+                        <aside class="api-docs">
+                            <h3>API Documentation</h3>
+                            <div class="doc-section">
+                                <h4>Endpoints</h4>
+                                <div class="endpoint">
+                                    <code>GET {path}/jcr:content/renditions/original</code>
+                                    <p>Download original file</p>
+                                </div>
+                                <div class="endpoint">
+                                    <code>GET /api/assets/{path}/renditions/cq5dam.web.1280.1280.jpeg</code>
+                                    <p>Download web-optimized rendition</p>
+                                </div>
+                                <div class="endpoint">
+                                    <code>GET /api/assets/{path}/renditions/cq5dam.thumbnail.319.319.png</code>
+                                    <p>Download thumbnail rendition</p>
+                                </div>
+                                <h4>Available Renditions</h4>
+                                <div class="endpoint">
+                                    <code>original</code>
+                                    <p>Original uploaded file</p>
+                                </div>
+                                <div class="endpoint">
+                                    <code>cq5dam.web.1280.1280.jpeg</code>
+                                    <p>Web-optimized (max 1280px)</p>
+                                </div>
+                                <div class="endpoint">
+                                    <code>cq5dam.thumbnail.319.319.png</code>
+                                    <p>Thumbnail (319x319)</p>
+                                </div>
                             </div>
-                            <div class="form-group">
-                                <label>Metadata (JSON)</label>
-                                <textarea id="meta-update-json" rows="6" placeholder='{
+                            <h4>Sample Code</h4>
+                            <div class="code-viewer">
+<pre><code>// Download original
+const response = await fetch(
+    'https://author-xxx.adobeaemcloud.com/content/dam/image.jpg/jcr:content/renditions/original',
+    {
+        headers: {
+            'Authorization': 'Bearer ' + accessToken,
+            'x-api-key': apiKey
+        }
+    }
+);
+
+const blob = await response.blob();
+const url = URL.createObjectURL(blob);
+
+// Trigger download
+const a = document.createElement('a');
+a.href = url;
+a.download = 'image.jpg';
+a.click();
+
+// Using AEMAssetAPI client
+const blob = await aemApi.downloadAsset(
+    '/content/dam/image.jpg',
+    'original' // or 'web', 'thumbnail'
+);
+
+// Download to server
+const result = await aemApi.downloadToServer(
+    '/content/dam/image.jpg',
+    'original'
+);</code></pre>
+                            </div>
+                        </aside>
+                    </div>
+                </div>
+
+                <!-- Get Metadata Tab -->
+                <div class="api-tab-content" id="api-tab-get-metadata">
+                    <div class="api-container">
+                        <div class="api-operations">
+                            <div class="api-card">
+                                <h3>Get Metadata Schema</h3>
+                                <p>에셋의 메타데이터 스키마를 가져옵니다.</p>
+                                <div class="form-group">
+                                    <label>Asset Path</label>
+                                    <input type="text" id="meta-get-path" placeholder="/content/dam/image.jpg">
+                                </div>
+                                <button class="btn btn-primary" id="get-meta-btn">Get Metadata</button>
+                                <div class="api-result" id="meta-get-result"></div>
+                            </div>
+                        </div>
+                        <aside class="api-docs">
+                            <h3>API Documentation</h3>
+                            <div class="doc-section">
+                                <h4>Endpoints</h4>
+                                <div class="endpoint">
+                                    <code>GET /api/assets/{path}.json</code>
+                                    <p>Get asset metadata (basic)</p>
+                                </div>
+                                <div class="endpoint">
+                                    <code>GET {path}/jcr:content/metadata.infinity.json</code>
+                                    <p>Get full metadata schema with all properties</p>
+                                </div>
+                                <h4>Common Metadata Namespaces</h4>
+                                <div class="endpoint">
+                                    <code>dc:</code>
+                                    <p>Dublin Core (title, description, creator, etc.)</p>
+                                </div>
+                                <div class="endpoint">
+                                    <code>dam:</code>
+                                    <p>DAM-specific (assetState, sha1, etc.)</p>
+                                </div>
+                                <div class="endpoint">
+                                    <code>tiff:</code>
+                                    <p>Image properties (width, height, orientation)</p>
+                                </div>
+                                <div class="endpoint">
+                                    <code>exif:</code>
+                                    <p>EXIF data (camera, exposure, etc.)</p>
+                                </div>
+                                <div class="endpoint">
+                                    <code>xmp:</code>
+                                    <p>XMP metadata (createDate, modifyDate, etc.)</p>
+                                </div>
+                            </div>
+                            <h4>Sample Code</h4>
+                            <div class="code-viewer">
+<pre><code>// Get basic metadata
+const response = await fetch(
+    'https://author-xxx.adobeaemcloud.com/api/assets/image.jpg.json',
+    {
+        headers: {
+            'Authorization': 'Bearer ' + accessToken,
+            'x-api-key': apiKey
+        }
+    }
+);
+const metadata = await response.json();
+
+// Get full metadata schema
+const schemaResponse = await fetch(
+    'https://author-xxx.adobeaemcloud.com/content/dam/image.jpg/jcr:content/metadata.infinity.json',
+    {
+        headers: {
+            'Authorization': 'Bearer ' + accessToken,
+            'x-api-key': apiKey
+        }
+    }
+);
+const schema = await schemaResponse.json();
+
+// Using AEMAssetAPI client
+const metadata = await aemApi.getMetadataSchema(
+    '/content/dam/image.jpg'
+);
+console.log(metadata.namespaces); // Organized by namespace
+console.log(metadata.properties); // All properties</code></pre>
+                            </div>
+                        </aside>
+                    </div>
+                </div>
+
+                <!-- Update Metadata Tab -->
+                <div class="api-tab-content" id="api-tab-update-metadata">
+                    <div class="api-container">
+                        <div class="api-operations">
+                            <div class="api-card">
+                                <h3>Update Metadata</h3>
+                                <p>에셋의 메타데이터를 업데이트합니다.</p>
+                                <div class="form-group">
+                                    <label>Asset Path</label>
+                                    <input type="text" id="meta-update-path" placeholder="/content/dam/image.jpg">
+                                </div>
+                                <div class="form-group">
+                                    <label>Metadata (JSON)</label>
+                                    <textarea id="meta-update-json" rows="6" placeholder='{
   "dc:title": "New Title",
   "dc:description": "Description"
 }'></textarea>
-                            </div>
-                            <button class="btn btn-primary" id="update-meta-btn">Update Metadata</button>
-                            <div class="api-result" id="meta-update-result"></div>
-                        </div>
-                    </div>
-
-                    <!-- API Documentation -->
-                    <aside class="api-docs">
-                        <h3>API Documentation</h3>
-                        <div class="doc-section">
-                            <h4>Endpoints</h4>
-                            <div class="endpoint">
-                                <code>GET /api/assets/{path}</code>
-                                <p>List assets in a folder</p>
-                            </div>
-                            <div class="endpoint">
-                                <code>POST /api/assets/{path}</code>
-                                <p>Upload a new asset</p>
-                            </div>
-                            <div class="endpoint">
-                                <code>GET /api/assets/{path}.json</code>
-                                <p>Get asset metadata</p>
-                            </div>
-                            <div class="endpoint">
-                                <code>PUT /api/assets/{path}</code>
-                                <p>Update asset metadata</p>
-                            </div>
-                            <div class="endpoint">
-                                <code>DELETE /api/assets/{path}</code>
-                                <p>Delete an asset</p>
+                                </div>
+                                <button class="btn btn-primary" id="update-meta-btn">Update Metadata</button>
+                                <div class="api-result" id="meta-update-result"></div>
                             </div>
                         </div>
-
-                        <h4>Sample Code</h4>
-                        <div class="code-viewer">
-<pre><code>// AEM Asset HTTP API Client
-const aemApi = new AEMAssetAPI({
-    host: 'https://author-xxx.adobeaemcloud.com',
-    token: 'YOUR_ACCESS_TOKEN'
-});
-
-// List assets
-const assets = await aemApi.listAssets(
-    '/content/dam/my-folder',
-    { limit: 20 }
+                        <aside class="api-docs">
+                            <h3>API Documentation</h3>
+                            <div class="doc-section">
+                                <h4>Endpoint</h4>
+                                <div class="endpoint">
+                                    <code>PUT /api/assets/{path}</code>
+                                    <p>Update asset metadata</p>
+                                </div>
+                                <h4>Request Body Format</h4>
+                                <div class="endpoint">
+                                    <code>class</code>
+                                    <p>Must be "asset"</p>
+                                </div>
+                                <div class="endpoint">
+                                    <code>properties</code>
+                                    <p>Object containing metadata key-value pairs</p>
+                                </div>
+                                <h4>Writable Properties</h4>
+                                <div class="endpoint">
+                                    <code>dc:title</code>
+                                    <p>Asset title (string)</p>
+                                </div>
+                                <div class="endpoint">
+                                    <code>dc:description</code>
+                                    <p>Asset description (string)</p>
+                                </div>
+                                <div class="endpoint">
+                                    <code>dc:creator</code>
+                                    <p>Asset creator/author (string[])</p>
+                                </div>
+                                <div class="endpoint">
+                                    <code>cq:tags</code>
+                                    <p>Asset tags (string[])</p>
+                                </div>
+                            </div>
+                            <h4>Sample Code</h4>
+                            <div class="code-viewer">
+<pre><code>// Update metadata via HTTP API
+await fetch(
+    'https://author-xxx.adobeaemcloud.com/api/assets/image.jpg',
+    {
+        method: 'PUT',
+        headers: {
+            'Authorization': 'Bearer ' + accessToken,
+            'x-api-key': apiKey,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            class: 'asset',
+            properties: {
+                'dc:title': 'New Title',
+                'dc:description': 'Updated description',
+                'dc:creator': ['John Doe'],
+                'cq:tags': ['marketing:campaign-2024']
+            }
+        })
+    }
 );
 
-// Upload asset
-const result = await aemApi.uploadAsset(
-    file,
-    '/content/dam/uploads'
-);
-
-// Get metadata
-const metadata = await aemApi.getMetadata(
-    '/content/dam/image.jpg'
-);
-
-// Update metadata
+// Using AEMAssetAPI client
 await aemApi.updateMetadata(
     '/content/dam/image.jpg',
     {
         'dc:title': 'New Title',
-        'dc:description': 'Updated'
+        'dc:description': 'Updated description'
     }
 );
 
-// Download asset
-const blob = await aemApi.downloadAsset(
-    '/content/dam/image.jpg',
-    'original'
-);</code></pre>
-                        </div>
-                    </aside>
+// Verify update
+const updated = await aemApi.getMetadataSchema(
+    '/content/dam/image.jpg'
+);
+console.log(updated.properties['dc:title']);</code></pre>
+                            </div>
+                        </aside>
+                    </div>
                 </div>
             </section>
 

@@ -472,9 +472,49 @@ body {
 }
 
 /* ===== HTTP API Page ===== */
+.api-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 24px;
+    background: var(--surface-color);
+    padding: 8px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.api-tab-btn {
+    padding: 12px 24px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+}
+
+.api-tab-btn:hover {
+    background: var(--background-color);
+    color: var(--text-primary);
+}
+
+.api-tab-btn.active {
+    background: var(--primary-color);
+    color: white;
+}
+
+.api-tab-content {
+    display: none;
+}
+
+.api-tab-content.active {
+    display: block;
+}
+
 .api-container {
     display: grid;
-    grid-template-columns: 1fr 400px;
+    grid-template-columns: 3fr 2fr;
     gap: 24px;
 }
 
@@ -512,8 +552,6 @@ body {
     padding: 12px;
     background: #1e1e1e;
     border-radius: var(--radius-sm);
-    max-height: 200px;
-    overflow-y: auto;
     display: none;
 }
 
@@ -952,8 +990,6 @@ body {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-height: 400px;
-    overflow-y: auto;
 }
 
 .asset-list-card {
@@ -1008,6 +1044,16 @@ body {
     font-size: 14px;
     font-weight: 500;
     color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.asset-list-path {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
